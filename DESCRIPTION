@@ -1,0 +1,31 @@
+Package: SCIBED
+Type: Package
+Title: Single Cell Imputation Benchmarking on Epigenomics Datasets
+Version: 0.2.0
+Authors@R: c(
+  person("Marta", "Moreno Gonzalez", email = "m.morenogonzalez@hubrecht.eu", role = c("aut", "cre")),
+  person("Jeroen", "de Ridder", email = "j.deridder-4@umcutrecht.nl", role = "ths"),
+  person("Jop", "Kind", email = "j.kind@hubrecht.eu", role = "ths"),
+  person("Robin H.", "van der Weide", email = "r.weide@hubrecht.eu", role = c("aut"))
+  )
+Description: More about what it does (maybe more than one line)
+    Use four spaces when indenting paragraphs within the Description.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Depends: 
+    R (>= 3.5.0)
+Imports:
+    Matrix,
+    Seurat (>= 5.0.0),
+    GenomicRanges (>= 1.56.1),
+    IRanges (>= 2.38.1),
+    GenomeInfoDb (>= 1.40.1),
+    S4Vectors,
+    methods
+RoxygenNote: 7.3.2
+Suggests: 
+    testthat (>= 3.0.0),
+    regioneR (>= 1.36.0),
+    parallel (>= 4.4.1)
+Config/testthat/edition: 3
