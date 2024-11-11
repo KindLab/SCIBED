@@ -37,6 +37,11 @@ A data frame with enrichment statistics, including optional permutation test res
 This function calculates enrichment for specified genomic regions, using either a `GRanges`,
 `GRangesList`, or `data.frame` of regions, and supports optional permutation testing.
 }
+\note{
+This quantification is done on pseudobulks; `calculate_SIMIC` and
+`calculate_correlation` are single-cell based. In the future, we want
+to add a single-cell variant of this function.
+}
 \examples{
 data(zeller_H3K4me3_matrix)
 data(zeller_H3K4me3_metadata)

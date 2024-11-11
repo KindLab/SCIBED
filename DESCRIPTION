@@ -1,7 +1,7 @@
 Package: SCIBED
 Type: Package
 Title: Single Cell Imputation Benchmarking on Epigenomics Datasets
-Version: 0.2.0
+Version: 0.3.0
 Authors@R: c(
   person("Marta", "Moreno Gonzalez", email = "m.morenogonzalez@hubrecht.eu", role = c("aut", "cre")),
   person("Jeroen", "de Ridder", email = "j.deridder-4@umcutrecht.nl", role = "ths"),
@@ -21,11 +21,17 @@ Imports:
     GenomicRanges (>= 1.56.1),
     IRanges (>= 2.38.1),
     GenomeInfoDb (>= 1.40.1),
+    proxyC (>= 0.4.1),
+    RcppAnnoy (>= 0.0.22),
+    sparseMatrixStats,
     S4Vectors,
     methods
 RoxygenNote: 7.3.2
 Suggests: 
     testthat (>= 3.0.0),
     regioneR (>= 1.36.0),
-    parallel (>= 4.4.1)
+    parallel (>= 4.4.1),
+    knitr,
+    rmarkdown
 Config/testthat/edition: 3
+VignetteBuilder: knitr

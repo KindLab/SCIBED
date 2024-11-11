@@ -126,6 +126,10 @@ minmax <- function(x, na.rm = TRUE) {
 #' @importFrom methods is
 #' @importFrom stats quantile
 #'
+#' @note This quantification is done on pseudobulks; `calculate_SIMIC` and
+#' `calculate_correlation` are single-cell based. In the future, we want
+#' to add a single-cell variant of this function.
+#'
 #' @examples
 #' data(zeller_H3K4me3_matrix)
 #' data(zeller_H3K4me3_metadata)
@@ -223,5 +227,126 @@ calculate_enrichment <- function(x, grouping_vector, regions, maxgap = -1L, mino
   per_region_stats
 }
 
-# generate_similarity_matrix
-# calculate_SIMIC
+#' Generate Similarity Matrix Using Cosine Distance
+#'
+#' This function calculates the cosine similarity matrix for pseudobulks.
+#'
+#' @param x A sparse matrix containing data to be grouped by the `grouping_vector`.
+#' @param grouping_vector A vector specifying group assignments for each column (cell) in `x`.
+#'
+#' @return A similarity matrix calculated using cosine distance on pseudobulk profiles.
+#' @importFrom proxyC simil
+#' @examples
+#' data(zeller_H3K4me3_matrix)
+#' data(zeller_H3K4me3_metadata)
+#'
+#' sim_mat <- generate_ab_initio(
+#'   x = zeller_H3K4me3_matrix,
+#'   grouping_vector = zeller_H3K4me3_metadata)
+#'
+#' @export
+generate_ab_initio <- function(x, grouping_vector) {
+
+  # Calculate pseudobulk matrix based on the grouping vector
+  pb_mat <- calculate_pseudobulk(x = x, grouping_vector = grouping_vector)
+
+  # Compute cosine similarity on the pseudobulk matrix
+  similarity_matrix <- proxyC::simil(pb_mat, margin = 2, method = "cosine")
+
+  similarity_matrix
+}
+
+
+#' Calculate SIMIC: Similarity Index for Clustering
+#'
+#' This function calculates the SIMIC score, which compares observed similarity to expected similarity
+#' for clustering cell types. The user can specify quantiles for high-variance bins (HVB) to focus on
+#' the most variable features.
+#'
+#' @param x A sparse matrix of data for similarity calculation.
+#' @param grouping_vector A vector indicating group assignments for each cell in `x`.
+#' @param ab_initio Optional precomputed similarity matrix. If `NULL`, it will be calculated.
+#' @param HVB_q Quantile of most variable bins to consider (e.g., 0.95 means top-5 percent variable bins).
+#' @param K Integer, number of nearest neighbors to consider in calculating similarity.
+#' @param N_cores Integer, number of cores for parallel processing.
+#' @return A data frame with observed similarity, expected similarity, and their ratio (delta).
+#' @importFrom proxyC simil
+#' @importFrom sparseMatrixStats rowVars
+#' @importFrom parallel mclapply
+#' @importFrom methods new
+#' @importFrom stats setNames
+#' @importFrom RcppAnnoy AnnoyEuclidean
+#' @examples
+#' data(zeller_H3K4me3_matrix)
+#' data(zeller_H3K4me3_metadata)
+#'
+#' sim_mat <- generate_ab_initio(
+#'   x = zeller_H3K4me3_matrix,
+#'   grouping_vector = zeller_H3K4me3_metadata)
+#'
+#' simicstats <- calculate_simic(
+#'   x = zeller_H3K4me3_matrix,
+#'   grouping_vector = zeller_H3K4me3_metadata,
+#'   ab_initio = sim_mat,
+#'   HVB_q = 0.95,
+#'   K = 10,
+#'   N_cores = 2)
+#'
+#' @export
+calculate_simic <- function(x, grouping_vector, ab_initio = NULL, HVB_q = 0.95, K = 10, N_cores = 2) {
+
+  # Calculate the ab initio similarity matrix if not provided
+  if (is.null(ab_initio)) {
+    ab_initio <- generate_ab_initio(x = x, grouping_vector = grouping_vector)
+  }
+  similarity_matrix <- minmax(ab_initio)
+
+  # Calculate expected similarity (ES_ij)
+  cell_type_proportions <- prop.table(table(grouping_vector))
+  cell_type_proportions <- cell_type_proportions[colnames(similarity_matrix)]
+
+  cell_type_names <- names(cell_type_proportions)
+  expected_similarity <- sum(sapply(cell_type_names, function(i) {
+    sum(similarity_matrix[cell_type_names, i] * cell_type_proportions[i] * cell_type_proportions)
+  }))
+
+  # Identify high-variance bins (HVB) based on the specified quantile
+  bin_variance <- sparseMatrixStats::rowVars(x, useNames = TRUE)
+  HVB <- names(bin_variance[bin_variance >= quantile(bin_variance, HVB_q)])
+  x_HVB <- x[HVB, ]
+
+  # Compute cosine distance matrix for high-variance bins
+  dmat <- as.matrix(1 - proxyC::simil(x_HVB, method = "correlation", margin = 2))
+
+  # Set up clustering vector based on cell types
+  cluster_vector <- setNames(as.character(grouping_vector), colnames(x))[colnames(dmat)]
+
+  # Initialize and build Annoy index for Euclidean distance with 1000 trees
+  a <- new(RcppAnnoy::AnnoyEuclidean, ncol(dmat))
+  a$setSeed(42)
+  for (i in seq_len(nrow(dmat))) {
+    a$addItem(i - 1, dmat[i, ])  # Annoy uses zero indexing
+  }
+  a$build(1000)
+
+  # Calculate observed similarity by finding K nearest neighbors and computing mean similarity
+  observed_similarity <- mean(unlist(parallel::mclapply(1:a$getNItems(), function(i) {
+    nn <- a$getNNsByItem(i - 1, K + 1) + 1  # Adjust for 0-based index
+    ct_e <- cluster_vector[nn]
+    mean(similarity_matrix[ct_e[1], ct_e[-1]])
+  }, mc.cores = N_cores)))
+
+  # Return observed, expected, and delta similarity values
+  output <- data.frame(
+    S_ij = observed_similarity,
+    ES_ij = expected_similarity,
+    delta = observed_similarity / expected_similarity
+  )
+
+  return(output)
+}
+
+
+
+
+

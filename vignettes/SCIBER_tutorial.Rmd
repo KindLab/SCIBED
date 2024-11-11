@@ -1,0 +1,48 @@
+---
+title: "Tutorial for using SCIBER."
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Tutorial for using SCIBER.}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(SCIBED)
+
+data(zeller_H3K4me3_matrix)
+data(zeller_H3K4me3_metadata)
+data(zeller_H3K4me3_peaks)
+```
+
+
+# quantifications
+
+## SIMIC
+
+Let's quantify the clustering-potential in the dataset(s). SIMIC (*Similarity-Integrated Metric for Improved Clustering*) gives a score that shows how well clusters belong to a same (or similar) cluster by comparing it to a *ab initio* generated cluster-similarity matrix from `generate_ab_initio`.
+
+```{r simic_example} 
+
+sim_mat <- generate_ab_initio(
+  x = zeller_H3K4me3_matrix,
+  grouping_vector = zeller_H3K4me3_metadata)
+
+stats_simic <- calculate_simic(
+  x = zeller_H3K4me3_matrix,
+  grouping_vector = zeller_H3K4me3_metadata,
+  ab_initio = sim_mat,
+  HVB_q = 0.95,
+  K = 10,
+  N_cores = 2)
+
+barplot(unlist(stats_simic))
+
+```

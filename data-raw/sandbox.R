@@ -242,53 +242,53 @@ calculateSIMIC <- function(data, cos_dist, mark, name) {
 }
 
 
-
-# FRiP score
-calculateFRiP <- function(data, ct_lin, group_var, regions, binsize, name) {
-    metadata <- data.frame('cell'=colnames(data)) %>% mutate(tmp=cell) %>% separate(tmp, into=c("ctype.from.LL", "number"))
-    metadata <- merge(metadata, ct_lin, by="ctype.from.LL")
-    metadata <- metadata[match(colnames(data), metadata$cell),]
-    chroms_to_use <- c("chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7", "chr8", "chr9", "chr10", "chr11", "chr12", "chr13", "chr14", "chr15", "chr16", "chr17", "chr18", "chr19", "chrX", "chrY")
-
-    windows <- tileGenome(seqinfo(BSgenome.Mmusculus.UCSC.mm10), tilewidth = as.numeric(binsize), cut.last.tile.in.chrom = TRUE)
-    regions_rebinned <- lapply(regions, function(x) {
-        ctype <- unique(x$ctype.from.LL)
-        output <- subsetByOverlaps(windows,x)
-        output$ctype.from.LL <- ctype
-        return(output)
-    })
-
-    metrics <- lapply(na.omit(unique(regions$ctype.from.LL)), function(g){
-        # subset peaks
-        peaks_all <- regions[regions$ctype.from.LL == g]
-        peaks_all_rebin <- regions_rebinned[regions_rebinned$ctype.from.LL == g]
-        # subset count table to relevant cells
-        cells <- na.omit(metadata[metadata[,variable] == g,])$cell
-        subset_data <- data[,colnames(data) %in% cells] %>% as.data.frame() %>% rownames_to_column("regions") %>% separate(regions, into=c("chrom","coordinates"), sep=":") %>%
-             separate(coordinates, into=c("start","end"), sep="-") %>% makeGRangesFromDataFrame(keep.extra.columns=T)
-        subset_data <- keepSeqlevels(subset_data,chroms_to_use,pruning.mode = 'coarse')
-        subset_data_chrPeaks <- subset_data %>% filter(seqnames %in% unique(seqnames(peaks_all)))
-        # Calculate observed FRiP
-        message(paste0("\t",as.character(g)," - Creating FRiP-related metrics..."))
-        data_obsPeaks = subsetByOverlaps(subset_data, peaks_all)
-        data_obsPeaks_chrPeaks = subsetByOverlaps(subset_data_chrPeaks, peaks_all)
-        FRiP_obs_all = colSums(as.data.frame(data_obsPeaks@elementMetadata))/colSums(as.data.frame(subset_data@elementMetadata))
-        obs_FRiP_chrPeaks = colSums(as.data.frame(data_obsPeaks_chrPeaks@elementMetadata))/colSums(as.data.frame(subset_data_chrPeaks@elementMetadata))
-        # return dataframe with relevant information
-        FRiP_stats = data.frame("cell"=names(FRiP_obs_all),
-            "obs_FRiP_all"=FRiP_obs_all,
-            "obs_FRiP_chrPeaks"=obs_FRiP_chrPeaks) %>%
-        mutate(ctype.from.LL = g,
-            width_all_peaks = sum(width(reduce(peaks_all_rebin))),
-            perc_all_peaks = sum(width(reduce(peaks_all_rebin)))/sum(width(reduce(windows))))
-        rownames(FRiP_stats) <- NULL
-        return(FRiP_stats)
-    }) %>% do.call(rbind, .) %>%
-        mutate('dataset'=gsub(name, pattern=".rds", replacement=""))
-
-    return(metrics)
-}
-
+#
+# # FRiP score
+# calculateFRiP <- function(data, ct_lin, group_var, regions, binsize, name) {
+#     metadata <- data.frame('cell'=colnames(data)) %>% mutate(tmp=cell) %>% separate(tmp, into=c("ctype.from.LL", "number"))
+#     metadata <- merge(metadata, ct_lin, by="ctype.from.LL")
+#     metadata <- metadata[match(colnames(data), metadata$cell),]
+#     chroms_to_use <- c("chr1", "chr2", "chr3", "chr4", "chr5", "chr6", "chr7", "chr8", "chr9", "chr10", "chr11", "chr12", "chr13", "chr14", "chr15", "chr16", "chr17", "chr18", "chr19", "chrX", "chrY")
+#
+#     windows <- tileGenome(seqinfo(BSgenome.Mmusculus.UCSC.mm10), tilewidth = as.numeric(binsize), cut.last.tile.in.chrom = TRUE)
+#     regions_rebinned <- lapply(regions, function(x) {
+#         ctype <- unique(x$ctype.from.LL)
+#         output <- subsetByOverlaps(windows,x)
+#         output$ctype.from.LL <- ctype
+#         return(output)
+#     })
+#
+#     metrics <- lapply(na.omit(unique(regions$ctype.from.LL)), function(g){
+#         # subset peaks
+#         peaks_all <- regions[regions$ctype.from.LL == g]
+#         peaks_all_rebin <- regions_rebinned[regions_rebinned$ctype.from.LL == g]
+#         # subset count table to relevant cells
+#         cells <- na.omit(metadata[metadata[,variable] == g,])$cell
+#         subset_data <- data[,colnames(data) %in% cells] %>% as.data.frame() %>% rownames_to_column("regions") %>% separate(regions, into=c("chrom","coordinates"), sep=":") %>%
+#              separate(coordinates, into=c("start","end"), sep="-") %>% makeGRangesFromDataFrame(keep.extra.columns=T)
+#         subset_data <- keepSeqlevels(subset_data,chroms_to_use,pruning.mode = 'coarse')
+#         subset_data_chrPeaks <- subset_data %>% filter(seqnames %in% unique(seqnames(peaks_all)))
+#         # Calculate observed FRiP
+#         message(paste0("\t",as.character(g)," - Creating FRiP-related metrics..."))
+#         data_obsPeaks = subsetByOverlaps(subset_data, peaks_all)
+#         data_obsPeaks_chrPeaks = subsetByOverlaps(subset_data_chrPeaks, peaks_all)
+#         FRiP_obs_all = colSums(as.data.frame(data_obsPeaks@elementMetadata))/colSums(as.data.frame(subset_data@elementMetadata))
+#         obs_FRiP_chrPeaks = colSums(as.data.frame(data_obsPeaks_chrPeaks@elementMetadata))/colSums(as.data.frame(subset_data_chrPeaks@elementMetadata))
+#         # return dataframe with relevant information
+#         FRiP_stats = data.frame("cell"=names(FRiP_obs_all),
+#             "obs_FRiP_all"=FRiP_obs_all,
+#             "obs_FRiP_chrPeaks"=obs_FRiP_chrPeaks) %>%
+#         mutate(ctype.from.LL = g,
+#             width_all_peaks = sum(width(reduce(peaks_all_rebin))),
+#             perc_all_peaks = sum(width(reduce(peaks_all_rebin)))/sum(width(reduce(windows))))
+#         rownames(FRiP_stats) <- NULL
+#         return(FRiP_stats)
+#     }) %>% do.call(rbind, .) %>%
+#         mutate('dataset'=gsub(name, pattern=".rds", replacement=""))
+#
+#     return(metrics)
+# }
+#
 
 
 
