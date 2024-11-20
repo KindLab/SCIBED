@@ -104,7 +104,7 @@ minmax <- function(x, na.rm = TRUE) {
   (x - min(x, na.rm = na.rm)) / (max(x, na.rm = na.rm) - min(x, na.rm = na.rm))
 }
 
-#' Calculate Enrichment for Regions
+#' Calculate Pseudobulk-Enrichment for Regions
 #'
 #' This function calculates enrichment for specified genomic regions, using either a `GRanges`,
 #' `GRangesList`, or `data.frame` of regions, and supports optional permutation testing.
@@ -127,21 +127,20 @@ minmax <- function(x, na.rm = TRUE) {
 #' @importFrom stats quantile
 #'
 #' @note This quantification is done on pseudobulks; `calculate_SIMIC` and
-#' `calculate_correlation` are single-cell based. In the future, we want
-#' to add a single-cell variant of this function.
+#' `calculate_correlation` are single-cell based.
 #'
 #' @examples
 #' data(zeller_H3K4me3_matrix)
 #' data(zeller_H3K4me3_metadata)
 #' data(zeller_H3K4me3_peaks)
 #'
-#' enrichment_stats <- calculate_enrichment(
+#' enrichment_stats <- calculate_enrichment_bulk(
 #'   x = zeller_H3K4me3_matrix,
 #'   grouping_vector = zeller_H3K4me3_metadata,
 #'   regions = zeller_H3K4me3_peaks)
 #'
 #' @export
-calculate_enrichment <- function(x, grouping_vector, regions, maxgap = -1L, minoverlap = 0L, perm_times = NULL, perm_cores = 2) {
+calculate_enrichment_bulk <- function(x, grouping_vector, regions, maxgap = -1L, minoverlap = 0L, perm_times = NULL, perm_cores = 2) {
 
   # Check the format of the `regions` input and convert if necessary
   if (is(regions, "GRangesList")) {
@@ -346,6 +345,148 @@ calculate_simic <- function(x, grouping_vector, ab_initio = NULL, HVB_q = 0.95, 
   return(output)
 }
 
+#' Calculate Enrichment for Regions
+#'
+#' This function calculates enrichment for specified genomic regions, using either a `GRanges`,
+#' `GRangesList`, or `data.frame` of regions, and supports optional permutation testing.
+#'
+#' @param x A sparse matrix representing data to be transformed to pseudobulk for enrichment calculation.
+#' @param grouping_vector A vector indicating group assignments for columns in `x`. Must be named like the column-names of `x`.
+#' @param regions A `GRanges`, `GRangesList`, or `data.frame` specifying the regions for enrichment analysis.
+#'   If a `GRangesList` is provided, it must be named to match entries in `grouping_vector`.
+#' @param maxgap Integer specifying maximum gap between bins (default: -1).
+#' @param minoverlap Integer specifying minimum overlap between bins (default: 0).
+#' @param perm_times Integer specifying the number of permutations for permutation testing (optional).
+#' @param perm_cores Integer specifying the number of cores for parallel computation in permutation testing (optional).
+#'
+#' @return A data frame with enrichment statistics, including optional permutation test results.
+#' @importFrom GenomicRanges GRanges GRangesList reduce
+#' @importFrom GenomeInfoDb seqlevelsStyle
+#' @importFrom IRanges IRanges subsetByOverlaps
+#' @importFrom S4Vectors mcols `mcols<-`
+#' @importFrom methods is
+#' @importFrom stats quantile median
+#'
+#' @note When wanting to compare between groups and regions,
+#'  make sure you use ample (>> 100) permutations to get stable enough Z-normalized SIP-score.
+#'
+#' @examples
+#' data(zeller_H3K4me3_matrix)
+#' data(zeller_H3K4me3_metadata)
+#' data(zeller_H3K4me3_peaks)
+#'
+#' enrichment_stats <- calculate_enrichment_bulk(
+#'   x = zeller_H3K4me3_matrix,
+#'   grouping_vector = zeller_H3K4me3_metadata,
+#'   regions = zeller_H3K4me3_peaks)
+#'
+#' @export
+calculate_enrichment <- function(x, grouping_vector, regions, maxgap = -1L, minoverlap = 0L, perm_times = NULL, perm_cores = 2) {
+
+  # Check the format of the `regions` input and convert if necessary
+  if (is(regions, "GRangesList")) {
+    if (any(is.na(match(grouping_vector, names(regions))))) {
+      stop("Names in `regions` (GRangesList) must be found in `grouping_vector`.")
+    }
+    regions <- regions[unique(grouping_vector)]
+
+  } else if (is(regions, "GRanges")) {
+    regions <- GRangesList(input_regions = regions)
+
+  } else if (is(regions, "data.frame")) {
+    if (ncol(regions) < 3) {
+      stop("The `regions` data frame must have at least three columns.")
+    }
+    regions <- GRanges(seqnames = regions[, 1], ranges = IRanges(start = regions[, 2], end = regions[, 3]))
+    regions <- GRangesList(input_regions = regions)
+
+  } else {
+    stop("`regions` must be a `GRanges`, `GRangesList`, or `data.frame`.")
+  }
+
+  if(!all(colnames(x) == names(grouping_vector))){
+    stop("items in `grouping_vector` should named like column names of `x`")
+  }
+
+  perm_genome <- GenomicRanges::reduce(GRanges(rownames(x)))
+
+  # Transform input matrix `x` to GRanges
+  x <- x[rowSums(x) > 0, ]
+  x_gr <- GRanges(rownames(x))
+  S4Vectors::mcols(x_gr) <- as.data.frame(x)
+  x_depth <- colSums(as.matrix(S4Vectors::mcols(x_gr)))
+
+  # Ensure consistent chromosome naming
+  regions <- lapply(regions, function(gr) {
+    GenomeInfoDb::seqlevelsStyle(gr) <- GenomeInfoDb::seqlevelsStyle(x_gr)
+    gr
+  })
+
+  # Calculate enrichment per region
+  per_region_stats <- do.call(rbind, lapply(seq_along(regions), function(i) {
+
+    gr <- regions[[i]]
+    y <- colSums(as.matrix(S4Vectors::mcols(IRanges::subsetByOverlaps(x_gr, gr, maxgap = maxgap, minoverlap = minoverlap))))
+    partial_result <- data.frame(
+      group = grouping_vector[names(y)],
+      region = names(regions)[i],
+      SIP = y / x_depth[names(y)]
+    )
+    partial_result <- do.call(rbind, lapply(split.data.frame(partial_result, partial_result$group), function(e) {
+      data.frame(
+        group = e$group[1],
+        region = e$region[1],
+        SIP = stats::median(e$SIP)
+      )
+    }))
+
+
+    # Perform permutation testing if requested
+    if (!is.null(perm_times)) {
+      perm_results <- parallel::mclapply(seq_len(perm_times), mc.cores = perm_cores, function(p_i) {
+        set.seed(p_i)
+        gr_p <- regioneR::resampleGenome(
+          A = gr,
+          genome = perm_genome,
+          min.tile.width = pmax(pmin(1e3, quantile(gr@ranges@width, .1)),100)
+        )
+        y <- colSums(as.matrix(S4Vectors::mcols(IRanges::subsetByOverlaps(x_gr, gr_p, maxgap = maxgap, minoverlap = minoverlap))))
+        df <- data.frame(
+          group = grouping_vector[names(y)],
+          SIP = y / x_depth[names(y)]
+        )
+
+        do.call(rbind, lapply(split.data.frame(df, df$group), function(e) {
+          data.frame(
+            group = e$group[1],
+            SIP = stats::median(e$SIP)
+          )
+        }))
+      })
+
+      # Aggregate permutation results
+      perm_out <- do.call(rbind, perm_results)
+      perm_stats <- do.call(rbind, lapply(split.data.frame(perm_out, perm_out$group), function(e) {
+        data.frame(
+          group = e$group[1],
+          SIPperm_mu = mean(e$SIP),
+          SIPperm_sd = sd(e$SIP)
+        )
+      }))
+
+      # Merge and calculate Z-scores for enrichment
+      partial_result <- merge(partial_result, perm_stats, by = "group", all.x = TRUE)
+      partial_result$SIPperm_times <- perm_times
+      partial_result$SIPperm_Z <- (partial_result$SIP - partial_result$SIPperm_mu) / partial_result$SIPperm_sd
+    }
+
+    # return
+    partial_result
+  }))
+
+  rownames(per_region_stats) <- NULL
+  per_region_stats
+}
 
 
 

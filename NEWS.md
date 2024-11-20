@@ -1,8 +1,14 @@
+# SCIBED 0.4.0
+* Updated vignette
+* Regenerated example data
+* Renamed the pseudobulk metric `calculate_enrichment` to `calculate_enrichment_bulk`
+* Included the single-cell metric `calculate_enrichment` 
+
 # SCIBED 0.3.0
 
 * Included most core functionality to quantify data.
 * Included base vignette
-* Cleaned up fodler structure
+* Cleaned up folder structure
 
 # SCIBED 0.2.0
 

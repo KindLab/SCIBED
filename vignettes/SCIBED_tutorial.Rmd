@@ -6,7 +6,7 @@ output:
     toc: yes
     toc_depth: 5
 vignette: >
-  %\VignetteIndexEntry{Tutorial for using SCIBED.}
+  %\VignetteIndexEntry{Tutorial for using SCIBED}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -126,7 +126,7 @@ library("SAVER")
 Since SAVER is a computationally-expensive algorithm, we will run it with 4 cores for this tutorial (see the [SAVER tutorial](https://mohuangx.github.io/SAVER/articles/saver-tutorial.html) for more information on how to use SAVER). It should be noted that SAVER runs on raw count data matrices, but other imputation algorithms (eg. [MAGIC](https://www.sciencedirect.com/science/article/pii/S0092867418307244?via%3Dihub), [KNN-smoothing](https://www.biorxiv.org/content/10.1101/217737v3)) might require some sort of read-depth normalization step prior to imputation.
 
 ```{r run SAVER}
-dataPostImputation <- saver(as.matrix(data[["in_silico_matrix"]]), 
+dataPostImputation <- saver(data[["in_silico_matrix"]], 
                             estimates.only = TRUE, ncores = 4)
 ```
 
@@ -191,16 +191,16 @@ ggplot(correlations, aes(x=group, y=mu, fill=Dataset)) +
 
 ### 3.2 Signal Enrichment
 
-To evaluate **signal enrichment**, we use the `calculate_enrichment` function to measure signal enrichment over a set of pre-defined regions, set by the parameter `regions`. For this tutorial, we'll use the peaks called from the Zeller *et al* dataset as described in the paper (`zeller_H3K4me3_peaks`). Note that these pre-defined regions should be formatted as a list, with each element of the list being a subset of regions. In this case, each element of the list is the peak calls for a cell type-specific subpopulation of cells.
+To evaluate **signal enrichment**, we can use the `calculate_enrichment` function or the `calculate_enrichment_bulk` function to measure signal enrichment over a set of pre-defined regions, set by the parameter `regions`. For this tutorial, we'll use the peaks called from the Zeller *et al* dataset as described in the paper (`zeller_H3K4me3_peaks`) and use the pseudobulk-based method (`calculate_enrichment_bulk`). Note that these pre-defined regions should be formatted as a list, with each element of the list being a subset of regions. In this case, each element of the list is the peak calls for a cell type-specific subpopulation of cells.
 
 ```{r calculate signal enrichment}
-enrichment_preImputation <- calculate_enrichment(
+enrichment_preImputation <- calculate_enrichment_bulk(
   x = data[["in_silico_matrix"]], 
   grouping_vector = zeller_H3K4me3_metadata, 
   regions = zeller_H3K4me3_peaks)
 enrichment_preImputation$Dataset <- "Pre-Imputation"
 
-enrichment_postImputation <- calculate_enrichment(
+enrichment_postImputation <- calculate_enrichment_bulk(
   x = as(dataPostImputation, "sparseMatrix"), 
   grouping_vector = zeller_H3K4me3_metadata, 
   regions = zeller_H3K4me3_peaks)

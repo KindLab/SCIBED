@@ -1,15 +1,14 @@
 Package: SCIBED
 Type: Package
 Title: Single Cell Imputation Benchmarking on Epigenomics Datasets
-Version: 0.3.0
+Version: 0.4.0
 Authors@R: c(
   person("Marta", "Moreno Gonzalez", email = "m.morenogonzalez@hubrecht.eu", role = c("aut", "cre")),
   person("Jeroen", "de Ridder", email = "j.deridder-4@umcutrecht.nl", role = "ths"),
   person("Jop", "Kind", email = "j.kind@hubrecht.eu", role = "ths"),
   person("Robin H.", "van der Weide", email = "r.weide@hubrecht.eu", role = c("aut"))
   )
-Description: More about what it does (maybe more than one line)
-    Use four spaces when indenting paragraphs within the Description.
+Description: SCIBED (Single-Cell Imputation Benchmarking of Epigenomic Data) is an R package designed to evaluate the performance of imputation algorithms for single-cell epigenomic data. It enables users to generate in silico epigenomic datasets with controlled levels of data quality and provides tools to assess the output of imputation methods quantitatively.
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
