@@ -1,0 +1,270 @@
+---
+title: "Tutorial for using SCIBED"
+date: 2024-11-20
+output: 
+  rmarkdown::html_vignette:
+    toc: yes
+    toc_depth: 5
+vignette: >
+  %\VignetteIndexEntry{Tutorial for using SCIBED.}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+## Introduction
+
+SCIBED (Single-Cell Imputation Benchmarking of Epigenomic Data) is an R package that allows the user to evaluate the performance of imputation algorithm on *In Silico* epigenomic data. Evaluation of single-cell imputation algorithms via SCIBED has three main steps: 
+
+(1) Generation of an *in silico* dataset. 
+
+(2) Single-cell imputation *(via an external algorithm)*.
+
+(3) Evaluation of datasets post-imputation. 
+
+## Installation
+
+You can install the most recent version of SCIBED from github with:
+
+```{r}
+# install.packages("devtools")
+#devtools::install_github("robinweide/SCIBED")
+```
+
+
+## Getting started
+
+Once we have the package installed, we can load it.
+
+```{r setup}
+library(SCIBED)
+```
+
+For this tutorial, we are going to use SCIBED on a subset of H3K4me3 mouse bone marrow sortChIC data from [Zeller *et al* (2023)](https://www.nature.com/articles/s41588-022-01260-3).
+
+```{r}
+data(zeller_H3K4me3_matrix)
+data(zeller_H3K4me3_metadata)
+data(zeller_H3K4me3_peaks)
+
+dim(zeller_H3K4me3_matrix)
+```
+
+
+## 1. Generating an *In silico* dataset
+
+The generation of *in silico* datasets is performed via the `generate_in_silico` function. This function requires several parameters as inputs:
+
+* `x`: Input matrix from which we generate the **In silico** matrices from. This matrix should contain genomic regions (all of the same length) along the rows and cells along the columns. This function works directly on raw count matrices, without requiring any sort of prior filtering (filtering can be done by tweaking other parameters) or normalization.  
+For this tutorial, we will run `generate_in_silico` on the H3K4me3 Zeller dataset.   
+
+* `grouping vector`: Vector containing the group (eg. cell type for the H3K4me3 Zeller dataset) each cell belongs to.    
+
+* `bin_size`: Length of the genomic regions (eg. 50kb for the H3K4me3 Zeller dataset).  
+
+* `min_RD`: *(Optional)* In case the dataset contains low-quality cells with high sparsity, you can set a numeric value indicating the minimum read depth for cells to be considered. Any cell with a lower read depth will be discarded.  
+For the H3K4me3 Zeller dataset, we will only consider cells with at least 1000 reads/cell. 
+
+* `fzc_sd`: *(Optional)* In case dataset contains low-quality cells with un-specific signal, you can use this parameter to filter cells with a too low or too large number of genomic bins with zero values. This numeric value can be set to remove cells with unspecific signal, which will contain a lower number of bins with zero values (based on Zeller *et al*, 2023).  
+For the H3K4me3 Zeller dataset, we will filter out cells with less than 0.2 times the standard deviation of percentage of zero-count bins.
+
+* `target_rd`: *(Optional)* Numeric value that indicates the expected coverage per cell in the *in silico* dataset in the form of reads/cell.
+
+* `noise_level`: *(Optional)* Numeric value that indicates the expected proportion of baseline noise added to the ground truth used to originate the *in silico* dataset. This is an optional parameter, to not add any additional noise it should be set to `NULL`.
+
+
+```{r In silico dataset generation}
+data <- generate_in_silico(
+  x=zeller_H3K4me3_matrix, 
+  grouping_vector = zeller_H3K4me3_metadata, 
+  bin_size = 5e4,
+  min_RD = 1000, 
+  fzc_sd = 0.2,
+  target_RD = 1000,
+  noise_level=1
+  )
+```
+
+The output of `generate_in_silico` is a list with two entries: `ground_truth` and `in_silico_matrix`. `ground_truth` contains the ground truth sparse matrix per cell type, while `in_silico_matrix` contains a sparse matrix with the simulation with the specified coverage per cell and baseline noise levels.
+
+```{r show generated dataset}
+lapply(data, head, n=3)
+```
+
+Alternatively, you can generate the ground truth on it's own using the `generate_ground_truth` function. This function shares the same `x`, `grouping_vector`, `bin_size`, `min_RD` and `fzc_sd` parameters as `generate_in_silico`.
+
+```{r generate ground truth}
+groundTruth <- generate_ground_truth(
+  x=zeller_H3K4me3_matrix, 
+  grouping_vector = zeller_H3K4me3_metadata, 
+  bin_size = 5e4,
+  min_RD = 1000, 
+  fzc_sd = 0.2)
+
+head(groundTruth, n=3)
+```
+
+## 2. Running imputation
+
+To exemplify how to use our metrics to compare datasets pre- and post-imputation, we will run SAVER ([Huang *et al*, 2018](https://www.nature.com/articles/s41592-018-0033-z)) on our *In silico* dataset. 
+
+This step can be replaced by the use of any other imputation algorithms.
+
+```{r setup SAVER}
+if (!require("SAVER", quietly = TRUE)) {
+  devtools::install_github("mohuangx/SAVER")
+}
+library("SAVER")
+```
+
+Since SAVER is a computationally-expensive algorithm, we will run it with 4 cores for this tutorial (see the [SAVER tutorial](https://mohuangx.github.io/SAVER/articles/saver-tutorial.html) for more information on how to use SAVER). It should be noted that SAVER runs on raw count data matrices, but other imputation algorithms (eg. [MAGIC](https://www.sciencedirect.com/science/article/pii/S0092867418307244?via%3Dihub), [KNN-smoothing](https://www.biorxiv.org/content/10.1101/217737v3)) might require some sort of read-depth normalization step prior to imputation.
+
+```{r run SAVER}
+dataPostImputation <- saver(as.matrix(data[["in_silico_matrix"]]), 
+                            estimates.only = TRUE, ncores = 4)
+```
+
+## 3. Evaluating imputation output
+
+Now that we have our datasets pre- and post-imputation, we can continue with evaluating the performance of the imputation algorithm using different metrics. The metrics evaluate three aspects of the imputed datasets:
+
+(1) How well the imputed single-cell profiles **matched the true underlying biological epigenetic signatures**.
+
+(2) How well the imputed single-cell profiles **improved signal enrichment**
+
+(3) How well the imputed single-cell profiles **improved similarity between closely-related cells** 
+
+
+For the next part of the tutorial, we'll load `ggplot2` for easier visualization of the results.
+
+```{r setup ggplot2 and reshape2}
+if (!require("ggplot2", quietly = TRUE)) {
+  install.packages("ggplot2")
+}
+library("ggplot2")
+```
+
+### 3.1 Correlation to ground truth
+
+To evaluate how well the imputed single-cell profiles matched the true underlying biological epigenetic signatures, we calculate the **correlation** to the previously generated ground truth via the `calculate_correlation` function. This evaluates the linear relationship between single cells and the corresponding cell-type specific ground truth. By default, this function calculated the Pearson correlation. However, a different type of correlation (eg. Spearman), can be calculated by modifying the `method` parameter.
+
+```{r calculate correlation}
+# Dataset pre-imputation
+correlation_preImputation <- calculate_correlation(
+  x=data[["in_silico_matrix"]], 
+  grouping_vector = zeller_H3K4me3_metadata,
+  ground_truth = data[["ground_truth"]],
+  bin_size = 5e4,
+  method="pearson")
+correlation_preImputation$Dataset <- "Pre-Imputation"
+
+# Dataset post-imputation with SAVER
+correlation_postImputation <- calculate_correlation(
+  x=dataPostImputation, 
+  grouping_vector = zeller_H3K4me3_metadata,
+  ground_truth = data[["ground_truth"]],
+  bin_size = 5e4,
+  method="pearson")
+correlation_postImputation$Dataset <- "SAVER"
+correlation_postImputation
+```
+
+We can use the output to compare the correlation to the ground truth in the datasets pre- and post-imputation:
+
+```{r plot correlation, fig.width=7, fig.height=3}
+correlations <- rbind(correlation_preImputation, correlation_postImputation)
+
+ggplot(correlations, aes(x=group, y=mu, fill=Dataset)) +
+  geom_bar(stat="identity", position = position_dodge()) +
+  geom_text(aes(label=round(mu, digits = 3), y=mu+sd+0.03), position = position_dodge(0.9)) +
+  geom_errorbar(aes(ymin=mu-sd, ymax=mu+sd), position = position_dodge(0.9), width=0.25) +
+  theme_bw()
+```
+
+
+
+### 3.2 Signal Enrichment
+
+To evaluate **signal enrichment**, we use the `calculate_enrichment` function to measure signal enrichment over a set of pre-defined regions, set by the parameter `regions`. For this tutorial, we'll use the peaks called from the Zeller *et al* dataset as described in the paper (`zeller_H3K4me3_peaks`). Note that these pre-defined regions should be formatted as a list, with each element of the list being a subset of regions. In this case, each element of the list is the peak calls for a cell type-specific subpopulation of cells.
+
+```{r calculate signal enrichment}
+enrichment_preImputation <- calculate_enrichment(
+  x = data[["in_silico_matrix"]], 
+  grouping_vector = zeller_H3K4me3_metadata, 
+  regions = zeller_H3K4me3_peaks)
+enrichment_preImputation$Dataset <- "Pre-Imputation"
+
+enrichment_postImputation <- calculate_enrichment(
+  x = as(dataPostImputation, "sparseMatrix"), 
+  grouping_vector = zeller_H3K4me3_metadata, 
+  regions = zeller_H3K4me3_peaks)
+enrichment_postImputation$Dataset <- "SAVER"
+```
+
+We can use the output to compare signal enrichment in the datasets pre- and post-imputation:
+
+```{r plot signal enrichment, fig.width=7, fig.height=3}
+enrichment <- rbind(enrichment_preImputation, enrichment_postImputation)
+
+ggplot(enrichment, aes(x=group, y=SIP, fill=Dataset)) +
+  geom_bar(stat="identity", position = position_dodge()) +
+  geom_text(aes(label=round(SIP, digits = 3), y = SIP+0.02), position = position_dodge(0.9)) +
+  facet_wrap(~region) +
+  theme_bw()
+```
+
+### 3.3 Cluster potential
+
+Finally, we can quantify the **clustering potential** in the dataset(s). SIMIC (*Similarity-Integrated Metric for Improved Clustering*) gives a score that shows how well cells belong to the same (or similar) cluster by comparing it to a *ab initio* generated cluster-similarity matrix from `generate_ab_initio`.
+
+SIMIC can be calculated via the `calculate_simic` function. Apart from the already describe parameters, there are a couple of other variables that may be tweaked by the used. `HVB_q` indicates the quantile of most variable genomic bins to consider, and `K` indicates the number of neighbors to be considered when calculating cell-cell similarity. Additionally, since this calculation can be computationally expensive, parallel processing can be enabled by setting a number of cores via the `N_cores` parameter.
+
+```{r simic_example} 
+sim_mat <- generate_ab_initio(
+  x = zeller_H3K4me3_matrix,
+  grouping_vector = zeller_H3K4me3_metadata)
+
+stats_simic_preImputed <- calculate_simic(
+  x = zeller_H3K4me3_matrix,
+  grouping_vector = zeller_H3K4me3_metadata,
+  ab_initio = sim_mat,
+  HVB_q = 0.95,
+  K = 10,
+  N_cores = 2)
+
+
+stats_simic_imputed <- calculate_simic(
+     x = as(dataPostImputation, "sparseMatrix"), 
+     grouping_vector = zeller_H3K4me3_metadata,
+     ab_initio = sim_mat,
+     HVB_q = 0.95,
+     K = 10,
+     N_cores = 2)
+```
+
+
+We can use the output to compare the clustering potential of the datasets pre- and post-imputation:
+
+```{r plot simic, fig.width=7, fig.height=3}
+stats_simic_preImputed$Dataset <- "Pre-imputation"
+stats_simic_imputed$Dataset <- "SAVER"
+
+stats_simic <- rbind(stats_simic_preImputed, stats_simic_imputed)
+
+ggplot(stats_simic, aes(y=delta, fill=Dataset, x=Dataset)) +
+  geom_bar(stat="identity", position = position_dodge()) +
+  geom_text(aes(label=round(delta, digits = 3), y = delta+0.05), position = position_dodge(0.9)) +
+  theme_bw()
+```
+
+## Session information
+
+```{r Session info}
+sessionInfo()
+```
