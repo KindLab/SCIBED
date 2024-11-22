@@ -351,7 +351,7 @@ calculate_simic <- function(x, grouping_vector, ab_initio = NULL, HVB_q = 0.95, 
 #' `GRangesList`, or `data.frame` of regions, and supports optional permutation testing.
 #'
 #' @param x A sparse matrix representing data to be transformed to pseudobulk for enrichment calculation.
-#' @param grouping_vector A vector indicating group assignments for columns in `x`. Must be named like the column-names of `x`.
+#' @param grouping_vector A vector indicating group assignments for columns in `x`.
 #' @param regions A `GRanges`, `GRangesList`, or `data.frame` specifying the regions for enrichment analysis.
 #'   If a `GRangesList` is provided, it must be named to match entries in `grouping_vector`.
 #' @param maxgap Integer specifying maximum gap between bins (default: -1).
@@ -402,10 +402,6 @@ calculate_enrichment <- function(x, grouping_vector, regions, maxgap = -1L, mino
 
   } else {
     stop("`regions` must be a `GRanges`, `GRangesList`, or `data.frame`.")
-  }
-
-  if(!all(colnames(x) == names(grouping_vector))){
-    stop("items in `grouping_vector` should named like column names of `x`")
   }
 
   perm_genome <- GenomicRanges::reduce(GRanges(rownames(x)))

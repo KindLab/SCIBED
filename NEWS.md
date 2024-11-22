@@ -1,3 +1,6 @@
+# SCIBED 0.4.1
+* Fix for [issue 6](https://github.com/robinweide/SCIBED/issues/6#issue-2679830640)
+
 # SCIBED 0.4.0
 * Updated vignette
 * Regenerated example data

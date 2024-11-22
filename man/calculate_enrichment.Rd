@@ -17,7 +17,7 @@ calculate_enrichment(
 \arguments{
 \item{x}{A sparse matrix representing data to be transformed to pseudobulk for enrichment calculation.}
 
-\item{grouping_vector}{A vector indicating group assignments for columns in `x`. Must be named like the column-names of `x`.}
+\item{grouping_vector}{A vector indicating group assignments for columns in `x`.}
 
 \item{regions}{A `GRanges`, `GRangesList`, or `data.frame` specifying the regions for enrichment analysis.
 If a `GRangesList` is provided, it must be named to match entries in `grouping_vector`.}
