@@ -1,0 +1,10 @@
+version: "3.9"
+services:
+  scibed-rstudio:
+    build: .
+    ports:
+      - "8787:8787"
+    environment:
+      PASSWORD: scibed   # user=rstudio, password=scibed
+    volumes:
+      - .:/home/rstudio/projects   # mount current repo if you want local edits

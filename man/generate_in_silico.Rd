@@ -10,6 +10,7 @@ generate_in_silico(
   bin_size,
   target_RD,
   noise_level = 0,
+  noise_vector = NULL,
   min_RD = 0,
   fzc_sd = NULL
 )
@@ -24,6 +25,8 @@ generate_in_silico(
 \item{target_RD}{A numeric value specifying the target read depth for downsampling.}
 
 \item{noise_level}{A numeric value indicating the noise level to be added; defaults to 0.}
+
+\item{noise_vector}{If `noise_level` is set to 0, the user can add a vector containing user-specified noise-values per bin.}
 
 \item{min_RD}{An integer specifying the minimum read depth required for inclusion.}
 

@@ -44,6 +44,7 @@ Once we have the package installed, we can load it.
 
 ```{r setup}
 library(SCIBED)
+library(tidyverse)
 ```
 
 For this tutorial, we are going to use SCIBED on a subset of H3K4me3 mouse bone marrow sortChIC data from [Zeller *et al* (2023)](https://www.nature.com/articles/s41588-022-01260-3).
@@ -108,6 +109,43 @@ groundTruth <- generate_ground_truth(
   fzc_sd = 0.2)
 
 head(groundTruth, n=3)
+```
+
+### alternative: a noise vector
+
+If one has a predefined vector of noise-levels per bin, use the `noise_vector` parameter intead of the `noise_level` parameter in `generate_in_silico`.
+```{r In silico dataset generation with a noise vector}
+
+# set a chunk of the genome to high noise
+noise_vector <- setNames(rep(0, nrow(zeller_H3K4me3_matrix)),rownames(zeller_H3K4me3_matrix))
+noise_vector[grepl("chr1:26[0-9][0-9][0-9][0-9][0-9][0-9]", names(noise_vector))] <- 50
+
+# run generate_in_silico()
+in_silico_output <- generate_in_silico(x = zeller_H3K4me3_matrix,
+                                       grouping_vector = zeller_H3K4me3_metadata,
+                                       bin_size = 50000,
+                                       target_RD = 10000,
+                                       noise_vector = noise_vector)
+
+# demonstration of the effect
+gt <- in_silico_output$ground_truth
+in_silico_output <- in_silico_output$in_silico_matrix
+in_silico_output <- rowSums(as.matrix(in_silico_output[,grepl('Eryths',colnames(in_silico_output))]))
+
+df <- rbind(data.frame(mode = 'groundTruth', bins = names(gt[,"Eryths"]), 
+                  value = gt[,"Eryths"]),
+            data.frame(mode = 'noise added as vector', bins = names(noise_vector), value = noise_vector),
+            data.frame(mode = 'mode = noise vector', bins = names(in_silico_output), value = in_silico_output))
+
+rownames(df) <- NULL
+df <- separate(df, bins, c("chromosome",'start','end'), sep = "[\\:\\-]", remove = F,convert = T)
+
+ggplot(df[df$chromosome == 'chr1' & df$start >= 1e7 & df$start <= 4e7,], aes(x = start, y = value)) +
+  facet_wrap('mode', ncol = 1, scales = 'free_y') +
+  geom_area() +
+  theme_bw() +
+  labs(x = "chr1:10000000-40000000", y = NULL, title = 'adding bin-specific noise') +
+  theme(axis.text = element_blank(), axis.ticks = element_blank())
 ```
 
 ## 2. Running imputation

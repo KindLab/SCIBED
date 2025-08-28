@@ -85,6 +85,34 @@ increase_noise <- function(x, increase_factor = 0) {
   output
 }
 
+#' Add Noise-vector to Sparse Matrix
+#'
+#' Adds a noise-vector to a sparse matrix.
+#'
+#' @param x A sparse matrix of class `dgCMatrix`.
+#' @param noise_vector A numeric vector of `length(nrow(x))`.
+#'
+#' @return A sparse matrix with added noise.
+#' @examples
+#' \dontrun{
+#' # Assuming `sparse_mat` is a dgCMatrix
+#' NV = abs(rnorm(100,mean(as.matrix(x)),sd(as.matrix(x))))
+#' add_noisevector(sparse_mat[1:100,], noise_vector = NV)
+#'}
+#'
+add_noisevector <- function(x, noise_vector) {
+  if (!inherits(x, "dgCMatrix")) {
+    stop("`x` must be a sparse matrix of class `dgCMatrix`.")
+  }
+
+  if(length(noise_vector) != nrow(x)){
+    stop("`noise_vector` must have the same length as rows in `x`.")
+  }
+
+  x + noise_vector
+
+}
+
 
 #' Calculate Pseudobulk from Sparse Matrix
 #'
@@ -278,6 +306,7 @@ generate_ground_truth <- function(x, grouping_vector, bin_size, min_RD = 0, fzc_
 #' @param bin_size An integer specifying the expected bin size in base pairs.
 #' @param target_RD A numeric value specifying the target read depth for downsampling.
 #' @param noise_level A numeric value indicating the noise level to be added; defaults to 0.
+#' @param noise_vector If `noise_level` is set to 0, the user can add a vector containing user-specified noise-values per bin.
 #' @param min_RD An integer specifying the minimum read depth required for inclusion.
 #' @param fzc_sd An optional numeric value for filtering by fraction of zero bins (FZC).
 #'
@@ -300,7 +329,7 @@ generate_ground_truth <- function(x, grouping_vector, bin_size, min_RD = 0, fzc_
 #'   noise_level = 0.1)
 #'
 #' @export
-generate_in_silico <- function(x, grouping_vector, bin_size, target_RD, noise_level = 0, min_RD = 0, fzc_sd = NULL) {
+generate_in_silico <- function(x, grouping_vector, bin_size, target_RD, noise_level = 0, noise_vector = NULL, min_RD = 0, fzc_sd = NULL) {
 
   # Check that grouping_vector contains no NA values and only strings
   if (!all(stats::complete.cases(grouping_vector))) {
@@ -326,7 +355,16 @@ generate_in_silico <- function(x, grouping_vector, bin_size, target_RD, noise_le
   # Add noise if specified
   if (noise_level > 0) {
     ground_truth_matrix <- increase_noise(x = ground_truth_matrix, increase_factor = noise_level)
+  } else if(!is.null(noise_vector)){
+
+    nv <- setNames(noise_vector, rownames(x))
+    nv_missing <- rownames(ground_truth_matrix)[!rownames(ground_truth_matrix) %in% names(nv)]
+    nv <- c(nv, setNames(rep(0,length(nv_missing)), nv_missing))[rownames(ground_truth_matrix)]
+
+    ground_truth_matrix <- add_noisevector(ground_truth_matrix, nv)
   }
+
+
 
   # Downsample to introduce sparsity
   ground_truth_matrix <- Seurat::SampleUMI(ground_truth_matrix, max.umi = as.numeric(target_RD))
