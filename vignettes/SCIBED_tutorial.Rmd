@@ -57,6 +57,15 @@ data(zeller_H3K4me3_peaks)
 dim(zeller_H3K4me3_matrix)
 ```
 
+A second dataset for H3K9me3 from the same manuscript is included and can be accessed:
+```{r}
+data(zeller_H3K9me3_matrix)
+data(zeller_H3K9me3_metadata)
+data(zeller_H3K9me3_peaks)
+
+dim(zeller_H3K9me3_matrix)
+```
+
 
 ## 1. Generating an *In silico* dataset
 
