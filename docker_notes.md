@@ -15,10 +15,16 @@ Login:
   password: scibed
 ```
 
-# Usage from image
+# Docker hub
 
-Since we do `docker save -o scibed_docker_image.tar scibed-scibed-rstudio` with every update, you can load the image directly like so:
-
+We did this:
 ```
-docker load -i scibed_docker_image.tar
+docker tag scibed-scibed-rstudio robinhweide/scibed-scibed-rstudio:V1
+docker login
+docker push robinhweide/scibed-scibed-rstudio:V1
+```
+
+So you can do:
+```
+docker pull robinhweide/scibed-scibed-rstudio:V1
 ```
