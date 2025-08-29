@@ -16,7 +16,7 @@ This issue of noisy and sparse data is not unique to scHPTM. In the more mature 
 
 ### Quickest option: Docker 🐋
 
-A ready-built Docker image lives here: [docker hub](https://www.docker.com/robinhweide/scibed-scibed-rstudio).
+A ready-built Docker image lives here: [docker hub](https://hub.docker.com/r/robinhweide/scibed-scibed-rstudio).
 
 ### Prerequisites
 
