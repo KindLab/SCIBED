@@ -14,6 +14,10 @@ This issue of noisy and sparse data is not unique to scHPTM. In the more mature 
 
 ## Getting Started
 
+### Quickest option: Docker 🐋
+
+A ready-built Docker image lives here: [docker hub](docker.io/robinhweide/scibed-scibed-rstudio).
+
 ### Prerequisites
 
 To get started with SCIBED, you'll need R (>= 3.5.0) with the following packages:
