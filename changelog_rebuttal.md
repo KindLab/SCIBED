@@ -10,7 +10,7 @@ broader histone marks. --- R2.m.3
 > Include tutorials for custom noise models (e.g., open-chromatin bias) or 
 broader histone marks. --- R2.m.3
 
-### 3. Expand tutorials
+### 3. Expand tutorials ✅
 
 > The example provided in the GitHub repository 
 (https://github.com/KindLab/SCIBED) should be expanded to include a 
@@ -39,3 +39,7 @@ use for other researchers --- R1.m.6
 
 1. Docker image was built and uploaded to Docker hub [4]
 2. Added H3K9me3-datasets and referred to it in the tutorial [2]
+
+### 20250901
+
+1. Added second vignette (ranking_vignette) to show complete workflow using H3K9me3 [2,3]

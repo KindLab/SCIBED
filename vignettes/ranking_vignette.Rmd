@@ -1,0 +1,202 @@
+---
+title: "Using SCIBED to rank imputations"
+date: 2025-09-1
+output: 
+  rmarkdown::html_vignette:
+    toc: yes
+    toc_depth: 5
+vignette: >
+  %\VignetteIndexEntry{Using SCIBED to rank imputations}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+# Full Example Workflow
+
+In this section we demonstrate a full analysis workflow using **SCIBED**.
+Our main question is: *is it worth to impute this H3K9me3 data with SAVER or with kNN-smoothing?*?
+
+We will:
+
+1. Simulate sparse single-cell epigenomics data  
+2. Apply several imputation methods  
+3. Score the imputed data  
+4. Compare and rank methods
+
+This provides a minimal but end-to-end use case.
+
+## Setting up
+### load packages
+```{r setup_pack, message=FALSE, warning=FALSE}
+library(SCIBED)
+library(tidyverse)
+library(Matrix)
+
+# load algorithms
+library(SAVER)
+source("https://raw.githubusercontent.com/yanailab/knn-smoothing/refs/heads/master/knn_smooth.R")
+
+options(scipen = 999)
+```
+
+### load datasets
+
+For this tutorial, we are going to use SCIBED on a subset of H3K9me3 mouse bone marrow sortChIC data from [Zeller *et al* (2023)](https://www.nature.com/articles/s41588-022-01260-3). 
+
+```{r setup_data, message=FALSE, warning=FALSE}
+data(zeller_H3K9me3_matrix)
+data(zeller_H3K9me3_metadata)
+data(zeller_H3K9me3_peaks)
+```
+
+## 1. simulate data
+
+Let's simulate an experiment with quite some noise and with 5000 reads per cell.
+
+```{r In silico dataset generation, fig.height=2, fig.width=8}
+# run generate_in_silico()
+in_silico_output <- generate_in_silico(x = zeller_H3K9me3_matrix,
+                                       grouping_vector = zeller_H3K9me3_metadata,
+                                       bin_size = 50000,
+                                       target_RD = 5000, noise_level = 1.5)
+
+# plot chromosome 1
+bins <- cbind(seq(5e4, 195e6, by = 5e4)-5e4,seq(5e4, 195e6, by = 5e4))
+bins <- paste0("chr1:",bins[,1],"-",bins[,2])
+
+par(mfrow = c(2,1), mar = c(1,5,1,1))
+plot(in_silico_output$ground_truth[bins,'Eryths'], t = 'h',xlab = '', ylab = 'input', axes = F, main = 'H3K9me3 (Eryths) pseudobulks')
+mat <- in_silico_output$in_silico_matrix[bins, grepl('Eryths',colnames(in_silico_output$in_silico_matrix))]
+plot(rowMeans(mat), t = 'h',xlab = '', ylab = 'in silico', axes = F)
+mtext(text = 'chr1',side = 1)
+par(mfrow = c(1,1))
+```
+## 2. Apply imputation methods  
+
+Here, we are going to run SAVER ([Huang *et al.*, 2018](https://www.nature.com/articles/s41592-018-0033-z)) and kNN-smoothing ([Wagner *et al.*, 2017](https://www.biorxiv.org/content/early/2018/04/09/217737)) on the *In silico* dataset. 
+
+### 2.1 SAVER
+```{r run SAVER, message=FALSE}
+dataPostImputation <- list()
+dataPostImputation[['raw']] <- in_silico_output[["in_silico_matrix"]]
+dataPostImputation[['SAVER']]  <- saver(in_silico_output[["in_silico_matrix"]], 
+                                        estimates.only = TRUE, ncores = 4)
+```
+
+### 2.2 KNN
+```{r run KNN, message=FALSE}
+dataPostImputation[['KNN']] <- knn_smoothing(in_silico_output[["in_silico_matrix"]], k = 20)
+```
+
+## 3. Score the imputed data  
+
+```{r prep scoring}
+scoring_list <- list()
+```
+
+### 3.1 Correlation
+```{r score correlation}
+scoring_list[['correlation']] <- do.call('rbind',lapply(names(dataPostImputation), function(ID){
+  out <- calculate_correlation(dataPostImputation[[ID]], 
+                        grouping_vector = zeller_H3K9me3_metadata,
+                        ground_truth = in_silico_output$ground_truth,
+                        bin_size = 5e4,method="pearson")
+  out$algorithm <- ID
+  out[out$group == 'complete',]
+}))
+scoring_list[['correlation']]$rank <- rank(-scoring_list[['correlation']]$mu)
+scoring_list[['correlation']]$mm <- SCIBED::minmax(scoring_list[['correlation']]$mu) 
+```
+
+### 3.2 Signal Enrichment
+```{r score enrichment}
+scoring_list[['enrichment']] <- do.call('rbind',lapply(names(dataPostImputation), function(ID){
+  
+  out <- calculate_enrichment_bulk(
+    x = Matrix(dataPostImputation[[ID]], sparse = T), 
+    grouping_vector = zeller_H3K9me3_metadata, 
+    regions = zeller_H3K9me3_peaks)
+
+  # average between intra-cluster SIPs
+  out <- out[out$group == out$region,]
+  data.frame(algorithm = ID, mu = mean(out[,"SIP"]), sd = sd(out[,"SIP"]))
+  
+}))
+scoring_list[['enrichment']]$rank <- rank(-scoring_list[['enrichment']]$mu)
+scoring_list[['enrichment']]$mm <- SCIBED::minmax(scoring_list[['enrichment']]$mu) 
+```
+
+### 3.3 Cluster potential
+```{r score clustering}
+sim_mat <- generate_ab_initio(
+  x = zeller_H3K9me3_matrix,
+  grouping_vector = zeller_H3K9me3_metadata)
+
+scoring_list[['clustering']] <- do.call('rbind',lapply(names(dataPostImputation), function(ID){
+  
+  out <- calculate_simic(
+    x = Matrix(dataPostImputation[[ID]], sparse = T),
+    grouping_vector = zeller_H3K9me3_metadata,
+    ab_initio = sim_mat,
+    HVB_q = 0.95,
+    K = 10,
+    N_cores = 2)
+  
+  out$algorithm = ID
+  out
+
+}))
+scoring_list[['clustering']]$rank <- rank(-scoring_list[['clustering']]$delta)
+scoring_list[['clustering']]$mm <- SCIBED::minmax(scoring_list[['clustering']]$delta) 
+```
+
+
+## 4. Compare and rank methods
+
+Now we combine all metrics and calculate a final ranking.
+```{r compare and rank, fig.width=7}
+# parse all scores
+scoring_df <- bind_rows(lapply(scoring_list, function(df){df[,c('algorithm','mm')]}), .id = 'metric')
+
+# compute combined score
+scoring_df_combined <- scoring_df  |> 
+  group_by(algorithm) |>
+  summarise(mm = mean(mm)) |>
+  ungroup() |>
+  mutate(alg_rank = rank(-mm)) 
+alg_order <- rev(scoring_df_combined$algorithm[order(scoring_df_combined$alg_rank)])
+scoring_df_combined$metric = 'combined' 
+scoring_df_combined$alg_rank <- NULL
+
+# combine both dataframes and add rank
+scoring_df_combined <- rbind(scoring_df_combined,scoring_df)
+scoring_df_combined <- scoring_df_combined |> 
+  group_by(metric) |>
+  mutate(rank = order(-mm))
+
+# plot
+scoring_df_combined$algorithm <- factor(scoring_df_combined$algorithm, levels = alg_order)
+scoring_df_combined$metric <- factor(scoring_df_combined$metric, levels = c('combined','correlation','enrichment','clustering'))
+ggplot(scoring_df_combined, aes(x = metric, y = algorithm, fill = mm, label = rank)) +
+  geom_tile() +
+  geom_text() +
+  scale_fill_gradient(low = 'white',high = 'skyblue') +
+  theme_bw() +
+  guides(fill = 'none')
+
+```
+
+SAVER is the overall winner here, but performed worse at signal enrichment.
+
+## Session information
+
+```{r Session info}
+sessionInfo()
+```

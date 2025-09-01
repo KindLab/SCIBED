@@ -1,3 +1,9 @@
+# SCIBED 0.5.0
+* Added `noise_vector` parameter to `generate_in_silico()`
+* Added explainer on the `noise_vector` parameter of `generate_in_silico()` to the SCIBED_tutorial
+* Docker image was built and uploaded to Docker hub
+* Added second vignette (`ranking_vignette`) to show complete workflow using the newly added H3K9me3-dataset
+
 # SCIBED 0.4.1
 * Fix for [issue 6](https://github.com/robinweide/SCIBED/issues/6#issue-2679830640)
 
