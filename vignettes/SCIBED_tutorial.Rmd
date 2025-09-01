@@ -34,7 +34,7 @@ You can install the most recent version of SCIBED from github with:
 
 ```{r}
 # install.packages("devtools")
-#devtools::install_github("robinweide/SCIBED")
+#devtools::install_github("kindlab/SCIBED")
 ```
 
 

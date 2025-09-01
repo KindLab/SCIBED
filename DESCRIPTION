@@ -1,7 +1,7 @@
 Package: SCIBED
 Type: Package
 Title: Single Cell Imputation Benchmarking on Epigenomics Datasets
-Version: 0.5.0
+Version: 0.5.1
 Authors@R: c(
   person("Marta", "Moreno Gonzalez", email = "m.morenogonzalez@hubrecht.eu", role = c("aut", "cre")),
   person("Jeroen", "de Ridder", email = "j.deridder-4@umcutrecht.nl", role = "ths"),
@@ -24,7 +24,8 @@ Imports:
     RcppAnnoy (>= 0.0.22),
     sparseMatrixStats,
     S4Vectors,
-    methods
+    methods,
+    rsvd
 RoxygenNote: 7.3.2
 Suggests: 
     testthat (>= 3.0.0),
